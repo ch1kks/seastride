@@ -1,0 +1,58 @@
+import { Decoration } from '../types';
+
+export const DECORATIONS: Decoration[] = [
+  {
+    id: 'dec_jolly_roger',
+    name: 'Classic Jolly Roger Flag',
+    description: 'Black flag featuring iconic skull & crossbones.',
+    currency: 'coins',
+    price: 300,
+    icon: '🏴‍☠️',
+    category: 'flag',
+  },
+  {
+    id: 'dec_kraken_figurehead',
+    name: 'Golden Kraken Figurehead',
+    description: 'A terrifying sea monster prow carved in pure gold.',
+    currency: 'gems',
+    price: 25,
+    icon: '🦑',
+    category: 'figurehead',
+  },
+  {
+    id: 'dec_ghost_glow',
+    name: 'Eerie Ghost Aura',
+    description: 'Surrounds your ship with spectral green luminescence.',
+    currency: 'gems',
+    price: 50,
+    icon: '👻',
+    category: 'effect',
+  },
+  {
+    id: 'dec_golden_cannons',
+    name: 'Polished Brass Trim',
+    description: 'Shining gold trim along the ship deck and rails.',
+    currency: 'coins',
+    price: 800,
+    icon: '✨',
+    category: 'effect',
+  },
+  {
+    id: 'dec_parrot_perch',
+    name: 'Captain’s Red Parrot',
+    description: 'A loyal squawking parrot perched on the ship wheel.',
+    currency: 'coins',
+    price: 500,
+    icon: '🦜',
+    category: 'lantern',
+  },
+  {
+    id: 'dec_spectral_sails',
+    name: 'Blood Red Pirate Sails',
+    description: 'Fierce battle-tested crimson sails.',
+    currency: 'gems',
+    price: 30,
+    icon: '🚩',
+    category: 'flag',
+  },
+];
