@@ -54,6 +54,7 @@ interface GameContextType {
   stepRecords: StepRecord[];
   stepStats: StepStats;
   addSteps: (amount: number) => void;
+  awardCoins: (amount: number) => void;
   isAutoWalking: boolean;
   toggleAutoWalk: () => void;
   
@@ -209,6 +210,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return next;
     });
+  };
+
+  const awardCoins = (amount: number) => {
+    if (amount <= 0) return;
+    setCoins(current => current + amount);
+    soundFx.playCoin();
   };
 
   // Auto walk simulator timer
@@ -588,6 +595,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         stepRecords,
         stepStats,
         addSteps,
+        awardCoins,
         isAutoWalking,
         toggleAutoWalk,
         attackPlayer,

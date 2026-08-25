@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { CompassRose } from './CompassRose';
 import { useCompassHeading } from '../hooks/useCompassHeading';
 import { useGpsTracker, FootprintPoint } from '../hooks/useGpsTracker';
+import { TreasureLocation, useTreasureHunt } from '../hooks/useTreasureHunt';
 import { Footprints, Navigation, Compass, MapPin, Play, Square, RotateCcw, Crosshair, Sparkles, Shield, Award } from 'lucide-react';
 import { useGame } from '../context/GameContext';
 
@@ -68,13 +69,23 @@ function createCaptainMarkerIcon(heading: number) {
   });
 }
 
+function createTreasureMarkerIcon(rewardCoins: number) {
+  return L.divIcon({
+    className: 'treasure-marker',
+    html: `<div style="width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #78350f; border: 2px solid #facc15; box-shadow: 0 0 14px rgba(250, 204, 21, 0.95); font-size: 18px; cursor: pointer;">💰</div><span style="display: block; margin-top: 2px; color: #fff7cc; font: 700 10px serif; text-align: center; text-shadow: 0 1px 2px #000; white-space: nowrap;">${rewardCoins}</span>`,
+    iconSize: [42, 50],
+    iconAnchor: [21, 25],
+  });
+}
+
 export const StepMapView: React.FC<StepMapViewProps> = () => {
-  const { addSteps, totalStepsToday } = useGame();
+  const { addSteps, awardCoins, currentServer } = useGame();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const footprintLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const pathPolylineRef = useRef<L.Polyline | null>(null);
   const captainMarkerRef = useRef<L.Marker | null>(null);
+  const treasureLayerGroupRef = useRef<L.LayerGroup | null>(null);
 
   const { heading, cardinalDirection, setGpsHeading } = useCompassHeading();
   const {
@@ -93,6 +104,23 @@ export const StepMapView: React.FC<StepMapViewProps> = () => {
       addSteps(count);
     },
   });
+
+  const { treasures, nearbyTreasureCount, isLoadingTreasures, claimTreasure } = useTreasureHunt({
+    serverCode: currentServer.code,
+    currentLocation,
+  });
+  const [treasureNotice, setTreasureNotice] = useState<string | null>(null);
+
+  const handleClaimTreasure = useCallback(async (treasure: TreasureLocation) => {
+    const result = await claimTreasure(treasure.id);
+    setTreasureNotice(result.message);
+
+    if (result.claimed) {
+      awardCoins(result.rewardCoins);
+    }
+
+    window.setTimeout(() => setTreasureNotice(null), 3200);
+  }, [awardCoins, claimTreasure]);
 
   const [followCaptain, setFollowCaptain] = useState<boolean>(true);
   const [mapStyle, setMapStyle] = useState<'parchment' | 'standard'>('parchment');
@@ -122,6 +150,9 @@ export const StepMapView: React.FC<StepMapViewProps> = () => {
     const footprintGroup = L.layerGroup().addTo(map);
     footprintLayerGroupRef.current = footprintGroup;
 
+    const treasureGroup = L.layerGroup().addTo(map);
+    treasureLayerGroupRef.current = treasureGroup;
+
     const polyline = L.polyline([], {
       color: '#b45309',
       weight: 3,
@@ -150,6 +181,28 @@ export const StepMapView: React.FC<StepMapViewProps> = () => {
       mapInstanceRef.current = null;
     };
   }, []);
+
+  // Render personal treasure locations. The API keeps treasure IDs and claims shared by server.
+  useEffect(() => {
+    if (!treasureLayerGroupRef.current) return;
+
+    treasureLayerGroupRef.current.clearLayers();
+
+    treasures
+      .filter((treasure) => !treasure.claimed)
+      .forEach((treasure) => {
+        const marker = L.marker([treasure.lat, treasure.lng], {
+          icon: createTreasureMarkerIcon(treasure.rewardCoins),
+          keyboard: true,
+          title: `Claim ${treasure.rewardCoins} coins`,
+        });
+
+        marker.on('click', () => {
+          void handleClaimTreasure(treasure);
+        });
+        treasureLayerGroupRef.current?.addLayer(marker);
+      });
+  }, [handleClaimTreasure, treasures]);
 
   // Update Footprint Markers & Polyline Path when footprints state changes
   useEffect(() => {
@@ -243,6 +296,19 @@ export const StepMapView: React.FC<StepMapViewProps> = () => {
           </div>
         </div>
 
+        {/* Treasure Radar */}
+        <div className="bg-[#451a03]/95 border border-[#ca8a04] backdrop-blur-md px-2 py-1 rounded-xl text-amber-100 shadow-xl flex items-center gap-1.5 pointer-events-auto">
+          <div className="w-6 h-6 bg-[#78350f] rounded-lg flex items-center justify-center border border-[#facc15]">
+            <Award className="w-3.5 h-3.5 text-[#facc15]" />
+          </div>
+          <div>
+            <div className="text-[8px] sm:text-[9px] font-mono uppercase text-[#fde68a] leading-none">Treasure Radar</div>
+            <div className="text-[10px] sm:text-xs font-black text-white leading-tight">
+              {isLoadingTreasures ? 'Scanning…' : `${nearbyTreasureCount} within 2 km`}
+            </div>
+          </div>
+        </div>
+
         {/* Action Buttons: Simulate Walk & Style */}
         <div className="flex items-center gap-1 pointer-events-auto">
           <button
@@ -292,6 +358,12 @@ export const StepMapView: React.FC<StepMapViewProps> = () => {
         }`}
         style={{ minHeight: '100%' }}
       />
+
+      {treasureNotice && (
+        <div className="absolute top-20 left-1/2 z-40 -translate-x-1/2 rounded-xl border-2 border-[#facc15] bg-[#451a03]/95 px-4 py-2 text-center text-xs font-black text-[#fef3c7] shadow-2xl">
+          {treasureNotice}
+        </div>
+      )}
 
       {/* Vintage Map Parchment Paper Texture & Vignette Overlay */}
       {mapStyle === 'parchment' && (
