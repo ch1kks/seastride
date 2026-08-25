@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 const TREASURES_PER_SERVER = 12;
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 const STORAGE_PREFIX = 'seastride:treasures';
+export const TREASURE_RADAR_RADIUS_METERS = 1_000;
+export const TREASURE_CLAIM_RADIUS_METERS = 25;
 
 export interface TreasureLocation {
   id: string;
@@ -138,6 +140,13 @@ function distanceMeters(
   return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+export function getTreasureDistanceMeters(
+  currentLocation: { lat: number; lng: number },
+  treasure: Pick<TreasureLocation, 'lat' | 'lng'>,
+): number {
+  return distanceMeters(currentLocation, treasure);
+}
+
 /**
  * Uses VITE_TREASURE_SERVICE_URL when available. The service keeps each
  * treasure ID and claim authoritative by serverCode; this hook derives a
@@ -148,6 +157,7 @@ export function useTreasureHunt({ serverCode, currentLocation }: TreasureHuntOpt
   const deviceIdRef = useRef<string>('');
   const [treasures, setTreasures] = useState<StoredTreasure[]>([]);
   const [isLoadingTreasures, setIsLoadingTreasures] = useState(true);
+  const locationAnchorRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const loadTreasures = useCallback(async () => {
     const apiBaseUrl = getApiBaseUrl();
@@ -173,6 +183,7 @@ export function useTreasureHunt({ serverCode, currentLocation }: TreasureHuntOpt
 
   useEffect(() => {
     deviceIdRef.current = getDeviceId();
+    locationAnchorRef.current = null;
     setIsLoadingTreasures(true);
     void loadTreasures().finally(() => setIsLoadingTreasures(false));
 
@@ -193,6 +204,11 @@ export function useTreasureHunt({ serverCode, currentLocation }: TreasureHuntOpt
       window.removeEventListener('storage', syncAcrossTabs);
     };
   }, [loadTreasures, serverCode]);
+
+  // Preserve each device's generated locations while its GPS position updates.
+  if (!locationAnchorRef.current) {
+    locationAnchorRef.current = { lat: currentLocation.lat, lng: currentLocation.lng };
+  }
 
   const claimTreasure = useCallback(
     async (treasureId: string): Promise<ClaimResult> => {
@@ -241,12 +257,12 @@ export function useTreasureHunt({ serverCode, currentLocation }: TreasureHuntOpt
   );
 
   const locations = useMemo(
-    () => makeDeviceLocations(treasures, serverCode, deviceIdRef.current, currentLocation),
-    [currentLocation.lat, currentLocation.lng, serverCode, treasures],
+    () => makeDeviceLocations(treasures, serverCode, deviceIdRef.current, locationAnchorRef.current || currentLocation),
+    [serverCode, treasures],
   );
 
   const nearbyTreasureCount = locations.filter(
-    (treasure) => !treasure.claimed && distanceMeters(currentLocation, treasure) <= 2000,
+    (treasure) => !treasure.claimed && distanceMeters(currentLocation, treasure) <= TREASURE_RADAR_RADIUS_METERS,
   ).length;
 
   return {

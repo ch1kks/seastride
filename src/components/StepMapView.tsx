@@ -3,7 +3,12 @@ import L from 'leaflet';
 import { CompassRose } from './CompassRose';
 import { useCompassHeading } from '../hooks/useCompassHeading';
 import { useGpsTracker, FootprintPoint } from '../hooks/useGpsTracker';
-import { TreasureLocation, useTreasureHunt } from '../hooks/useTreasureHunt';
+import {
+  getTreasureDistanceMeters,
+  TREASURE_CLAIM_RADIUS_METERS,
+  TreasureLocation,
+  useTreasureHunt,
+} from '../hooks/useTreasureHunt';
 import { Footprints, Navigation, Compass, MapPin, Play, Square, RotateCcw, Crosshair, Sparkles, Shield, Award } from 'lucide-react';
 import { useGame } from '../context/GameContext';
 
@@ -86,6 +91,7 @@ export const StepMapView: React.FC<StepMapViewProps> = () => {
   const pathPolylineRef = useRef<L.Polyline | null>(null);
   const captainMarkerRef = useRef<L.Marker | null>(null);
   const treasureLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const autoClaimingTreasureIdsRef = useRef<Set<string>>(new Set());
 
   const { heading, cardinalDirection, setGpsHeading } = useCompassHeading();
   const {
@@ -112,15 +118,35 @@ export const StepMapView: React.FC<StepMapViewProps> = () => {
   const [treasureNotice, setTreasureNotice] = useState<string | null>(null);
 
   const handleClaimTreasure = useCallback(async (treasure: TreasureLocation) => {
+    if (getTreasureDistanceMeters(currentLocation, treasure) > TREASURE_CLAIM_RADIUS_METERS) {
+      setTreasureNotice(`Sail closer — you must be within ${TREASURE_CLAIM_RADIUS_METERS} m to claim this chest.`);
+      window.setTimeout(() => setTreasureNotice(null), 3200);
+      return;
+    }
+
     const result = await claimTreasure(treasure.id);
-    setTreasureNotice(result.message);
+    setTreasureNotice(result.claimed ? `${result.message} +${result.rewardCoins} Gold!` : result.message);
 
     if (result.claimed) {
       awardCoins(result.rewardCoins);
     }
 
     window.setTimeout(() => setTreasureNotice(null), 3200);
-  }, [awardCoins, claimTreasure]);
+  }, [awardCoins, claimTreasure, currentLocation]);
+
+  useEffect(() => {
+    const treasureToClaim = treasures.find(
+      (treasure) =>
+        !treasure.claimed &&
+        getTreasureDistanceMeters(currentLocation, treasure) <= TREASURE_CLAIM_RADIUS_METERS &&
+        !autoClaimingTreasureIdsRef.current.has(treasure.id),
+    );
+
+    if (!treasureToClaim) return;
+
+    autoClaimingTreasureIdsRef.current.add(treasureToClaim.id);
+    void handleClaimTreasure(treasureToClaim);
+  }, [currentLocation, handleClaimTreasure, treasures]);
 
   const [followCaptain, setFollowCaptain] = useState<boolean>(true);
   const [mapStyle, setMapStyle] = useState<'parchment' | 'standard'>('parchment');
@@ -304,7 +330,7 @@ export const StepMapView: React.FC<StepMapViewProps> = () => {
           <div>
             <div className="text-[8px] sm:text-[9px] font-mono uppercase text-[#fde68a] leading-none">Treasure Radar</div>
             <div className="text-[10px] sm:text-xs font-black text-white leading-tight">
-              {isLoadingTreasures ? 'Scanning…' : `${nearbyTreasureCount} within 2 km`}
+              {isLoadingTreasures ? 'Scanning…' : `${nearbyTreasureCount} within 1 km`}
             </div>
           </div>
         </div>
