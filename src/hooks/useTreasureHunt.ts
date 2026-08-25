@@ -139,10 +139,10 @@ function distanceMeters(
 }
 
 /**
- * Uses VITE_TREASURE_SERVICE_URL when available. The service must return
- * per-device coordinates but keep claim state authoritative by serverCode.
- * The localStorage fallback is intentionally limited to one browser profile,
- * keeping the prototype usable before that service is deployed.
+ * Uses VITE_TREASURE_SERVICE_URL when available. The service keeps each
+ * treasure ID and claim authoritative by serverCode; this hook derives a
+ * different deterministic location per device. The localStorage fallback is
+ * intentionally limited to one browser profile before that service is deployed.
  */
 export function useTreasureHunt({ serverCode, currentLocation }: TreasureHuntOptions) {
   const deviceIdRef = useRef<string>('');
